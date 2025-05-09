@@ -20,6 +20,11 @@ document.addEventListener("DOMContentLoaded", () => {
   const viewCardsBtn = document.getElementById("view-cards");
   const exportCsvBtn = document.getElementById("export-csv");
 
+  // Form fields for export settings
+  const organizerIdInput = document.getElementById("organizerId");
+  const hobbyIdInput = document.getElementById("hobbyId");
+  const groupIdInput = document.getElementById("groupId");
+
   // Store events data globally for export
   let eventsData = [];
 
@@ -273,6 +278,63 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   /**
+   * Get export settings from form
+   * @returns {Object} - Export settings
+   */
+  const getExportSettings = () => {
+    return {
+      organizerId: organizerIdInput.value || "10", // Default to 10 if not specified
+      hobbyId: hobbyIdInput.value || "",
+      groupId: groupIdInput.value || "",
+    };
+  };
+
+  /**
+   * Properly escape and format a field for CSV
+   * @param {string} value - The value to escape for CSV
+   * @returns {string} - CSV-escaped value
+   */
+  const escapeCsvField = (value) => {
+    if (value === null || value === undefined) return "";
+
+    // Convert to string and handle empty values
+    let str = String(value);
+    if (!str) return "";
+
+    // If the value contains quotes, commas, or newlines, it needs special handling
+    if (/[",\n\r]/.test(str)) {
+      // Double up any quotes and wrap in quotes
+      str = str.replace(/"/g, '""');
+      return `"${str}"`;
+    }
+
+    return str;
+  };
+
+  /**
+   * Clean and truncate description for CSV
+   * @param {string} description - Raw HTML description
+   * @returns {string} - Cleaned plain text
+   */
+  const cleanDescriptionForCsv = (description) => {
+    if (!description) return "";
+
+    // Remove HTML tags
+    let cleaned = description.replace(/<[^>]*>/g, " ");
+
+    // Remove excessive whitespace
+    cleaned = cleaned.replace(/\s+/g, " ").trim();
+
+    // Truncate if extremely long (helps with CSV file size)
+    const maxLength = 5000;
+    if (cleaned.length > maxLength) {
+      cleaned = cleaned.substring(0, maxLength) + "...";
+    }
+
+    return cleaned;
+  };
+
+  /**
    * Convert events data to CSV and download it
    */
   const exportToCsv = () => {
@@ -280,6 +342,9 @@ document.addEventListener("DOMContentLoaded", () => {
       showError("No events to export");
       return;
     }
+
+    // Get export settings
+    const settings = getExportSettings();
 
     // Define CSV headers matching the template
     const headers = [
@@ -296,9 +361,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Prepare event data rows
     const rows = eventsData.map((event) => {
-      const description = event.description
-        ? event.description.replace(/<[^>]*>/g, "").replace(/"/g, '""') // Escape double quotes
-        : "";
+      // Clean and escape description
+      const description = cleanDescriptionForCsv(event.description);
 
       // Determine location
       const location = event.isOnline ? "Online" : event.venue || "";
@@ -306,16 +370,17 @@ document.addEventListener("DOMContentLoaded", () => {
       // Extract meeting link for online events
       const meetingLink = event.isOnline ? extractMeetingLink(event) : "";
 
+      // Map event data to CSV columns
       return [
-        `"${event.title.replace(/"/g, '""')}"`, // name
-        `"${description}"`, // description
-        formatISODate(event.dateTime), // eventDate
-        `"${location}"`, // location
-        event.isOnline.toString(), // isVirtual
-        `"${meetingLink}"`, // meetingLink
-        "", // hobbyId - leave blank as this is specific to the template
-        event.groupId ? `"${event.groupId}"` : "", // groupId
-        event.organizerId ? `"${event.organizerId}"` : "", // organizerId
+        escapeCsvField(event.title), // name
+        escapeCsvField(description), // description
+        escapeCsvField(formatISODate(event.dateTime)), // eventDate
+        escapeCsvField(location), // location
+        escapeCsvField(event.isOnline), // isVirtual
+        escapeCsvField(meetingLink), // meetingLink
+        escapeCsvField(settings.hobbyId), // hobbyId
+        escapeCsvField(settings.groupId || event.groupId), // groupId
+        escapeCsvField(settings.organizerId), // organizerId
       ];
     });
 
