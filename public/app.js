@@ -43,6 +43,16 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   /**
+   * Format date to ISO string format for CSV export
+   * @param {string} isoString - ISO date string
+   * @returns {string} - ISO formatted date string
+   */
+  const formatISODate = (isoString) => {
+    if (!isoString) return "";
+    return isoString;
+  };
+
+  /**
    * Truncate text to specified length
    * @param {string} text - Text to truncate
    * @param {number} maxLength - Maximum length
@@ -65,6 +75,11 @@ document.addEventListener("DOMContentLoaded", () => {
     const cleanDescription = event.description
       ? event.description.replace(/<[^>]*>/g, "")
       : "No description provided";
+
+    // Location display
+    const locationDisplay = event.isOnline
+      ? "Online"
+      : event.venue || "Location not specified";
 
     return `
       <div class="event-card rounded-lg border bg-white text-gray-900 shadow-sm overflow-hidden relative hover:shadow-md transition-shadow duration-300">
@@ -90,11 +105,20 @@ document.addEventListener("DOMContentLoaded", () => {
         
         <!-- Card Footer -->
         <div class="flex items-center justify-between p-6 pt-0">
-          <div class="flex items-center text-xs text-gray-500">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-            ${formatDate(event.dateTime)}
+          <div class="flex flex-col space-y-1">
+            <div class="flex items-center text-xs text-gray-500">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              ${formatDate(event.dateTime)}
+            </div>
+            <div class="flex items-center text-xs text-gray-500">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              ${locationDisplay}
+            </div>
           </div>
           <a href="${event.eventUrl}" target="_blank" 
             class="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-indigo-600 text-white hover:bg-indigo-700 h-9 px-4 py-2">
@@ -115,6 +139,10 @@ document.addEventListener("DOMContentLoaded", () => {
       ? truncateText(event.description.replace(/<[^>]*>/g, ""), 100)
       : "No description provided";
 
+    const locationDisplay = event.isOnline
+      ? "Online"
+      : event.venue || "Location not specified";
+
     return `
       <tr>
         <td class="px-6 py-4 whitespace-nowrap">
@@ -125,6 +153,9 @@ document.addEventListener("DOMContentLoaded", () => {
         </td>
         <td class="px-6 py-4 whitespace-nowrap">
           <div class="text-sm text-gray-500">${formatDate(event.dateTime)}</div>
+        </td>
+        <td class="px-6 py-4 whitespace-nowrap">
+          <div class="text-sm text-gray-500">${locationDisplay}</div>
         </td>
         <td class="px-6 py-4 whitespace-nowrap">
           <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-indigo-100 text-indigo-800">
@@ -211,6 +242,37 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   /**
+   * Extract meeting link from description if available
+   * @param {Object} event - Event data
+   * @returns {string} - Meeting link or empty string
+   */
+  const extractMeetingLink = (event) => {
+    if (!event.description) return "";
+
+    // Look for URLs in the description
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const matches = event.description.match(urlRegex);
+
+    if (matches && matches.length > 0) {
+      // Filter for likely meeting URLs
+      const meetingDomains = [
+        "zoom.us",
+        "meet.google",
+        "teams.microsoft",
+        "webex",
+        "gotomeeting",
+      ];
+      const meetingUrls = matches.filter((url) =>
+        meetingDomains.some((domain) => url.includes(domain))
+      );
+
+      return meetingUrls.length > 0 ? meetingUrls[0] : "";
+    }
+
+    return "";
+  };
+
+  /**
    * Convert events data to CSV and download it
    */
   const exportToCsv = () => {
@@ -219,27 +281,41 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    // Define CSV headers
+    // Define CSV headers matching the template
     const headers = [
-      "Title",
-      "Description",
-      "Date/Time",
-      "Attendees",
-      "Event URL",
+      "name",
+      "description",
+      "eventDate",
+      "location",
+      "isVirtual",
+      "meetingLink",
+      "hobbyId",
+      "groupId",
+      "organizerId",
     ];
 
     // Prepare event data rows
     const rows = eventsData.map((event) => {
       const description = event.description
         ? event.description.replace(/<[^>]*>/g, "").replace(/"/g, '""') // Escape double quotes
-        : "No description";
+        : "";
+
+      // Determine location
+      const location = event.isOnline ? "Online" : event.venue || "";
+
+      // Extract meeting link for online events
+      const meetingLink = event.isOnline ? extractMeetingLink(event) : "";
 
       return [
-        `"${event.title.replace(/"/g, '""')}"`, // Escape double quotes
-        `"${description}"`,
-        `"${formatDate(event.dateTime)}"`,
-        event.going || 0,
-        `"${event.eventUrl}"`,
+        `"${event.title.replace(/"/g, '""')}"`, // name
+        `"${description}"`, // description
+        formatISODate(event.dateTime), // eventDate
+        `"${location}"`, // location
+        event.isOnline.toString(), // isVirtual
+        `"${meetingLink}"`, // meetingLink
+        "", // hobbyId - leave blank as this is specific to the template
+        event.groupId ? `"${event.groupId}"` : "", // groupId
+        event.organizerId ? `"${event.organizerId}"` : "", // organizerId
       ];
     });
 

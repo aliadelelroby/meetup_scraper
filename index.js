@@ -36,6 +36,26 @@ async function fetchMeetupEvents(query, lat, lon, radius) {
                     description
                     dateTime
                     going
+                    venue {
+                      name
+                      address
+                      city
+                      state
+                      country
+                      lat
+                      lng
+                    }
+                    eventType
+                    isOnline
+                    group {
+                      id
+                      name
+                      urlname
+                    }
+                    host {
+                      id
+                      name
+                    }
                   }
                 }
               }
@@ -69,6 +89,24 @@ async function fetchMeetupEvents(query, lat, lon, radius) {
     ) {
       return response.data.data.keywordSearch.edges.map((edge) => {
         const event = edge.node.result;
+        const venue = event.venue || {};
+        const group = event.group || {};
+        const host = event.host || {};
+
+        let formattedVenue = "";
+        if (venue.name) {
+          formattedVenue = venue.name;
+          if (venue.address) {
+            formattedVenue += `, ${venue.address}`;
+          }
+          if (venue.city) {
+            formattedVenue += `, ${venue.city}`;
+          }
+          if (venue.state) {
+            formattedVenue += `, ${venue.state}`;
+          }
+        }
+
         return {
           id: edge.node.id,
           title: event.title,
@@ -76,6 +114,14 @@ async function fetchMeetupEvents(query, lat, lon, radius) {
           description: event.description,
           dateTime: event.dateTime,
           going: event.going,
+          isOnline: event.isOnline || false,
+          eventType: event.eventType || "",
+          venue: formattedVenue || "Location not specified",
+          venueDetails: venue,
+          groupId: group.id || "",
+          groupName: group.name || "",
+          organizerId: host.id || "",
+          organizerName: host.name || "",
         };
       });
     }
